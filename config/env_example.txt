@@ -1,0 +1,47 @@
+# ================================
+# Apollo - Agentic AI Configuration
+# ================================
+# Rename this file to .env and fill in your values
+
+# ============ 推薦 1：Ollama (本地運行，無限制) ============
+# 安裝方式: https://ollama.com/download
+# 拉取模型: ollama pull llama3.2
+USE_OLLAMA=true
+OLLAMA_MODEL=llama3.2
+
+# ============ 推薦 2：Google Gemini ============
+# 取得方式: https://aistudio.google.com/api-keys
+# 注意：免費版有每分鐘調用限制 (15 RPM)
+GOOGLE_API_KEY=your-google-api-key
+
+# ============ Groq (部分地區限制) ============
+# 取得方式: https://console.groq.com/keys
+# 注意：香港等地區可能無法訪問
+GROQ_API_KEY=gsk_your-groq-api-key
+
+# ============ 其他 LLM (可選) ============
+OPENAI_API_KEY=sk-your-openai-api-key
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-api-key
+
+# LangSmith (Monitoring & Tracing)
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=ls-your-langsmith-api-key
+LANGCHAIN_PROJECT=apollo
+
+# Vector Store (Choose one)
+# Chroma (Local - no config needed)
+# Pinecone
+PINECONE_API_KEY=your-pinecone-api-key
+PINECONE_ENVIRONMENT=your-environment
+
+# Database
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/apollo
+
+# Redis (Cache & Message Queue)
+REDIS_URL=redis://localhost:6379/0
+
+# Application Settings
+APP_ENV=development
+DEBUG=true
+LOG_LEVEL=INFO
+
