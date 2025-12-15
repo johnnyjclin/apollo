@@ -1,18 +1,31 @@
 #!/usr/bin/env python3
 """
-🏷️ Apollo - 拍賣遊戲 PoC
+🏷️ Apollo - 拍賣遊戲 CLI
 
-驗證 AI Agent 的 Payment Intent 行為
+用途：
+- 命令行執行拍賣遊戲
+- 觀察 AI Agent 的談判和支付行為
+- 適合快速測試和批次實驗
 
-執行方式:
-    # 模擬模式 (無需 API Key)
-    python run_auction.py --mock
+執行方式：
+    # 使用 Ollama (推薦)
+    ollama serve  # 先啟動 Ollama
+    python run_auction.py
     
     # 使用 Gemini
-    export GOOGLE_API_KEY=your-api-key
-    python run_auction.py
+    export GOOGLE_API_KEY=your-key
+    python run_auction.py --provider gemini
+    
+    # 批次執行多場
+    python run_auction.py --batch 5
+    
+    # 模擬模式 (無 LLM)
+    python run_auction.py --mock
 
-API Key 取得: https://aistudio.google.com/api-keys
+輸出內容：
+- 談判過程記錄
+- Payment Intent 分析
+- Intent Error 統計
 """
 
 import asyncio
@@ -209,6 +222,13 @@ async def main():
         help="使用模擬模式 (無需 API Key)"
     )
     parser.add_argument(
+        "--provider",
+        type=str,
+        choices=["auto", "ollama", "gemini", "groq"],
+        default="auto",
+        help="選擇 LLM 提供者: auto, ollama, gemini, groq"
+    )
+    parser.add_argument(
         "--batch",
         type=int,
         default=0,
@@ -236,34 +256,50 @@ async def main():
     groq_key = os.getenv("GROQ_API_KEY")
     gemini_key = os.getenv("GOOGLE_API_KEY")
     
-    has_llm = ollama_running or groq_key or gemini_key
-    
-    if not has_llm and not args.mock:
-        print("\n⚠️  未檢測到可用的 LLM!")
-        print("\n" + "=" * 50)
-        print("🏠 推薦：Ollama (本地運行，無地區限制)")
-        print("=" * 50)
-        print("1. 安裝: https://ollama.com/download")
-        print("2. 拉取模型: ollama pull llama3.2")
-        print("3. 啟動服務: ollama serve")
-        print("4. 重新運行此程式")
-        print("\n" + "=" * 50)
-        print("☁️  或者：Google Gemini")
-        print("=" * 50)
-        print("1. 訪問: https://aistudio.google.com/api-keys")
-        print("2. 設置: export GOOGLE_API_KEY=your-key")
-        print("\n或使用模擬模式: python run_auction.py --mock")
-        return
+    # 根據指定的 provider 檢查
+    provider = args.provider
     
     if args.mock:
+        provider = "mock"
+    elif provider == "ollama" and not ollama_running:
+        print("\n❌ 指定使用 Ollama 但服務未運行!")
+        print("   請執行: ollama serve")
+        return
+    elif provider == "gemini" and not gemini_key:
+        print("\n❌ 指定使用 Gemini 但未設置 GOOGLE_API_KEY!")
+        print("   請執行: export GOOGLE_API_KEY=your-key")
+        return
+    elif provider == "groq" and not groq_key:
+        print("\n❌ 指定使用 Groq 但未設置 GROQ_API_KEY!")
+        print("   請執行: export GROQ_API_KEY=your-key")
+        return
+    elif provider == "auto":
+        # 自動選擇
+        if not (ollama_running or groq_key or gemini_key):
+            print("\n⚠️  未檢測到可用的 LLM!")
+            print("\n可用選項:")
+            print("  --provider ollama  (需要: ollama serve)")
+            print("  --provider gemini  (需要: export GOOGLE_API_KEY=...)")
+            print("  --provider groq    (需要: export GROQ_API_KEY=...)")
+            print("  --mock             (模擬模式)")
+            return
+    
+    # 設置環境變數讓 Agent 知道使用哪個 provider
+    os.environ["LLM_PROVIDER"] = provider
+    
+    # 顯示使用的 LLM
+    if provider == "mock":
         print("\n📌 使用模擬模式 (無 LLM)")
-    elif ollama_running:
+    elif provider == "ollama" or (provider == "auto" and ollama_running):
         model = os.getenv("OLLAMA_MODEL", "llama3.2")
-        print(f"\n✅ 檢測到 Ollama 運行中，使用本地模型: {model}")
-    elif groq_key:
-        print(f"\n✅ 使用 Groq: {groq_key[:10]}...")
-    elif gemini_key:
-        print(f"\n✅ 使用 Gemini: {gemini_key[:10]}...")
+        print(f"\n✅ 使用 Ollama (本地): {model}")
+        os.environ["LLM_PROVIDER"] = "ollama"
+    elif provider == "groq" or (provider == "auto" and groq_key):
+        print(f"\n✅ 使用 Groq: {groq_key[:15]}...")
+        os.environ["LLM_PROVIDER"] = "groq"
+    elif provider == "gemini" or (provider == "auto" and gemini_key):
+        print(f"\n✅ 使用 Gemini: {gemini_key[:15]}...")
+        os.environ["LLM_PROVIDER"] = "gemini"
     
     # API Key 不需要傳遞，Agent 會自動從環境變數讀取
     # 執行

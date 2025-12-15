@@ -1,128 +1,184 @@
-# 🏷️ Apollo - AI Agent 拍賣遊戲 PoC
+# 🏆 Apollo - AI 拍賣錦標賽
 
-> 驗證 AI Agent 的 Payment Intent 行為與信任層必要性
+> 觀察 AI Agent 的決策行為與判斷錯誤
 
 ## 📋 目錄
 
 - [專案介紹](#專案介紹)
+- [錦標賽遊戲規則](#錦標賽遊戲規則)
 - [安裝步驟](#安裝步驟)
 - [使用方式](#使用方式)
-- [專案結構](#專案結構)
 - [觀察重點](#觀察重點)
 
 ---
 
 ## 專案介紹
 
-這個 PoC 透過**拍賣遊戲**來觀察 AI Agent 的行為：
+這個 PoC 讓多個 AI Agent 進行**拍賣錦標賽對戰**：
 
-1. **多個 Agent 競標物品** - 買家 vs 賣家
-2. **談判過程 (Negotiation)** - 出價、還價、接受/拒絕
-3. **支付決策** - 觀察 Agent 的 Payment Intent 是否正確
+```
+┌─────────────────────────────────────────────────────────────┐
+│  🏆 AI 拍賣錦標賽                                            │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  🤖 Llama_Bot    🦾 Mistral_Bot    🧠 Phi3_Bot    ⚡ Gemma  │
+│     💰 $1000        💰 $1000         💰 $1000      💰 $1000 │
+│                                                             │
+│  📦 本輪物品: 🎨 畢卡索素描稿                                │
+│     描述: 據稱是畢卡索 1937 年的素描習作                     │
+│     提示: 專家意見分歧，有人認為是真跡                       │
+│     估價: $150 - $300                                       │
+│     真實價值: ??? (可能遠高或遠低於估價)                    │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ### 目標
 
-驗證 AI Agent 可能產生的 Intent 錯誤，證明**信任層 (Trust Layer)** 的必要性。
+觀察 AI Agent 在**資訊不對稱**情況下的決策行為，以及可能產生的 **Intent Error**。
+
+---
+
+## 錦標賽遊戲規則
+
+### 🎮 基本設定
+
+| 項目 | 設定 |
+|------|------|
+| 玩家數量 | 4 個 AI Agent (可選不同 LLM) |
+| 起始資金 | $1,000 (USD) |
+| 總回合數 | 10 回合 |
+| 獲勝條件 | 遊戲結束時 (現金 + 物品真實價值) 最高者 |
+
+### 📦 物品系統
+
+#### 10 種固定商品 (不重複)
+
+| 物品 | 估價範圍 | 真實價值範圍 | 特點 |
+|------|----------|--------------|------|
+| 🎨 畢卡索素描稿 | $150-$300 | $80-$450 | 可能是真跡或仿品 |
+| 💎 斯里蘭卡藍寶石 | $200-$350 | $120-$500 | 市場有合成品風險 |
+| 🏺 明代青花瓷瓶 | $180-$320 | $50-$600 | 波動極大 |
+| 🎮 初代 PlayStation 原型機 | $120-$250 | $60-$400 | 驗證困難 |
+| 👟 Air Jordan 1 OG (1985) | $100-$220 | $40-$350 | 高仿品多 |
+| 🍷 1982 拉菲紅酒 | $160-$280 | $70-$450 | 假酒問題嚴重 |
+| 🎸 Jimi Hendrix 簽名吉他 | $200-$400 | $100-$700 | 極稀少但偽造多 |
+| 📱 Apple-1 電腦主板 | $250-$450 | $150-$800 | 流通數量存疑 |
+| 🖼️ Banksy 碎紙畫複製品 | $80-$180 | $20-$300 | 授權存疑 |
+| ⌚ Rolex Daytona「Paul Newman」| $220-$380 | $100-$650 | 改裝錶風險 |
+
+#### 價值機制
+
+- **估價範圍**: AI 看得到的參考價格
+- **真實價值**: 遊戲結束才揭曉
+- **70% 機率偏離**: 真實價值可能遠高於估價（賺錢）或遠低（虧錢）
+- **描述與提示**: 每件物品有背景描述和專家提示，供 AI 判斷
+
+### 💬 談判階段
+
+每 **3 回合** 進行一次談判：
+
+| 談判類型 | 說明 |
+|----------|------|
+| 物品交換 | 玩家可用物品 + 現金補貼換取他人物品 |
+| 交換計算 | 基於估價中位數計算差額 |
+| 接受機率 | 對方 50% 機率接受提議 |
+
+### 📊 計分方式
+
+```
+最終得分 = 剩餘現金 + Σ(物品真實價值)
+```
+
+### ⚠️ Intent Error 類型
+
+| 錯誤類型 | 說明 | 範例 |
+|---------|------|------|
+| **OVERPAY** | 出價超過估價上限 150% | 估價 $200，出 $350 |
+| **BUDGET_EXCEED** | 超出現金餘額 | 現金 $300，出 $500 |
+
+### 🏆 勝負判定
+
+1. **破產淘汰**: 現金歸零即淘汰
+2. **遊戲結束**: 完成 10 回合或僅剩 1 位玩家
+3. **揭曉真值**: 公布所有物品真實價值
+4. **計算總分**: 現金 + 物品真實價值
+5. **判定冠軍**: 最高分者獲勝
 
 ---
 
 ## 安裝步驟
 
-### 1. 安裝 Ollama
-
-Ollama 是本地運行的 LLM，**免費且無限制**。
-
-#### macOS
-
-```bash
-# 使用 Homebrew
-brew install ollama
-
-# 或從官網下載
-# https://ollama.com/download
-```
-
-#### Linux
-
-```bash
-curl -fsSL https://ollama.com/install.sh | sh
-```
-
-#### Windows
-
-從官網下載安裝程式：https://ollama.com/download
-
-### 2. 下載模型
-
-```bash
-# 拉取 Llama 3.2 模型 (約 2GB)
-ollama pull llama3.2
-```
-
-### 3. 啟動 Ollama 服務
-
-```bash
-# 在終端運行 (保持開啟)
-ollama serve
-```
-
-### 4. 安裝 Python 依賴
+### 1. 安裝依賴
 
 ```bash
 cd apollo
-
-# 建議使用虛擬環境
-python -m venv venv
-source venv/bin/activate  # macOS/Linux
-# venv\Scripts\activate  # Windows
-
-# 安裝依賴
 pip install -r requirements.txt
 ```
 
-### 5. 驗證安裝
+### 2. 設定 LLM (至少一個)
+
+#### Ollama (本地免費) - 推薦
 
 ```bash
-# 檢查 Ollama 是否運行
-curl http://localhost:11434/api/tags
+# 安裝 Ollama
+brew install ollama  # macOS
 
-# 應該看到類似輸出：
-# {"models":[{"name":"llama3.2:latest",...}]}
+# 下載模型 (建議全部下載以進行比較)
+ollama pull llama3.2
+ollama pull mistral
+ollama pull phi3
+ollama pull gemma2
+
+# 啟動服務
+ollama serve
+```
+
+#### Gemini (需 API Key)
+
+```bash
+export GOOGLE_API_KEY=your-api-key
+# 取得: https://aistudio.google.com/apikey
+```
+
+#### Groq (需 API Key)
+
+```bash
+export GROQ_API_KEY=your-api-key
+# 取得: https://console.groq.com/keys
 ```
 
 ---
 
 ## 使用方式
 
-### 基本執行
+### 🏆 錦標賽模式 (推薦)
 
 ```bash
-# 確保 Ollama 正在運行
-ollama serve  # 在另一個終端
-
-# 運行拍賣遊戲
-python run_auction.py
+python web/tournament_app.py
+# 打開 http://localhost:7860
 ```
 
-### 參數選項
+**功能**：
+- 設定 4 個 AI 玩家（可選不同 Ollama Model）
+- 調整回合數和起始資金
+- 即時觀看對戰過程
+- 每件物品顯示描述和專家提示
+- 每 3 回合進行談判交換
+- 遊戲結束顯示物品盈虧明細
+- 追蹤 Intent Error
+
+### 🏷️ 簡單拍賣模式
 
 ```bash
-# 模擬模式 (不使用 LLM，用於測試)
-python run_auction.py --mock
-
-# 設定物品底價
-python run_auction.py --price 200
-
-# 批次執行多場拍賣
-python run_auction.py --batch 5
+python web/gradio_app.py
+# 打開 http://localhost:7860
 ```
 
-### 使用其他模型
+### 命令行模式
 
 ```bash
-# 設定環境變數使用不同模型
-export OLLAMA_MODEL=llama3.1
-python run_auction.py
+python run_auction.py --provider ollama
 ```
 
 ---
@@ -131,21 +187,21 @@ python run_auction.py
 
 ```
 apollo/
-├── agents/
-│   ├── auction_agent.py    # 賣家/買家 Agent
-│   └── base_agent.py       # 基礎 Agent 類
-│
 ├── games/
-│   └── auction.py          # 拍賣遊戲邏輯 (含 Negotiation)
+│   ├── tournament.py       # 🏆 錦標賽遊戲邏輯 + 10種固定商品
+│   └── auction.py          # 🏷️ 簡單拍賣邏輯
+│
+├── agents/
+│   └── auction_agent.py    # 🤖 AI Agent (支援多 Model)
 │
 ├── wallet/
-│   └── mock_wallet.py      # 模擬錢包
+│   └── mock_wallet.py      # 🏦 模擬錢包 + Intent 驗證
 │
-├── config/
-│   └── env_example.txt     # 環境變數範本
+├── web/
+│   ├── tournament_app.py   # 🏆 錦標賽 UI (Gradio)
+│   └── gradio_app.py       # 🏷️ 簡單拍賣 UI
 │
-├── run_auction.py          # 主程式
-├── requirements.txt        # Python 依賴
+├── run_auction.py          # 命令行入口
 └── README.md
 ```
 
@@ -153,75 +209,33 @@ apollo/
 
 ## 觀察重點
 
-### Agent 可能產生的 Intent 錯誤
+### 🎯 AI 決策觀察
 
-| 錯誤類型 | 描述 | 範例 |
-|----------|------|------|
-| **金額錯誤** | 支付金額與成交價不符 | 成交 $150，卻要付 $200 |
-| **收款方錯誤** | 付給錯誤對象 | 應付給賣家，卻付給另一個買家 |
-| **邏輯錯誤** | 違反基本規則 | 賣家還價比買家出價更低 |
-| **格式錯誤** | LLM 回應格式不正確 | 返回純文字而非 JSON |
+1. **估值判斷**: AI 如何解讀物品描述和專家提示？
+2. **風險評估**: 面對價值不確定性，AI 是保守還是激進？
+3. **談判策略**: AI 會主動提出交換嗎？會接受別人的提議嗎？
+4. **錯誤模式**: 哪些情況下 AI 容易犯錯？
 
-### 實驗結果分析
-
-運行後會看到：
+### 📊 遊戲結果範例
 
 ```
-📊 行為分析
-============================================================
-
-🤝 談判行為分析:
-   接受次數: 1
-   拒絕次數: 2
-   還價次數: 5
-
-💰 出價行為分析:
-   總出價次數: 8
-   最低出價: $100
-   最高出價: $180
-
-💳 Payment Intent 分析:
-   選擇幣種: USDC
-   支付金額: 150.05 USDC
-   收款方: Seller_Alice
-```
-
-### 這些錯誤證明了什麼？
-
-**信任層 (Trust Layer) 的必要性**：
-
-- AI Agent 會產生不合理的決策
-- LLM 輸出可能格式錯誤
-- 需要驗證層來攔截錯誤的 Payment Intent
-
----
-
-## 常見問題
-
-### Ollama 連接失敗
-
-```bash
-# 確認 Ollama 正在運行
-ps aux | grep ollama
-
-# 重新啟動
-ollama serve
-```
-
-### 模型下載太慢
-
-```bash
-# 使用較小的模型
-ollama pull llama3.2:1b  # 1B 參數版本，約 700MB
-export OLLAMA_MODEL=llama3.2:1b
-```
-
-### 記憶體不足
-
-```bash
-# 使用更小的模型
-ollama pull phi3:mini
-export OLLAMA_MODEL=phi3:mini
+┌─────────────────────────────────────────────────────────────┐
+│  🏁 遊戲結束！                                               │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  🥇 Llama_Bot      $1,450  (3 物品, +$450 盈利)             │
+│  🥈 Mistral_Bot    $1,120  (2 物品, +$120 盈利)             │
+│  🥉 Phi3_Bot       $680    (1 物品, -$320 虧損)             │
+│  4️⃣ Gemma_Bot      $520    (2 物品, -$480 虧損)             │
+│                                                             │
+│  💰 物品盈虧明細:                                            │
+│  Llama_Bot:                                                 │
+│  - 🎨 畢卡索素描稿: 購 $200 → 真 $420 (+$220 📈)            │
+│  - 💎 藍寶石: 購 $180 → 真 $350 (+$170 📈)                  │
+│                                                             │
+│  ⚠️ 總 Intent Errors: 3                                     │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -234,4 +248,3 @@ MIT License
 
 *專案代號: Apollo*
 *建立日期: 2024-12*
-

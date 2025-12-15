@@ -1,18 +1,37 @@
 """
-拍賣 Agent - 支援多種 LLM
+🤖 拍賣 AI Agent
 
-包含：
+用途：
+- 使用 LLM 驅動的 AI Agent 參與拍賣
+- 每個 Agent 有自己的錢包和決策邏輯
+- 觀察 AI 在談判和支付時的行為
+
+Agent 類型：
 1. SellerAgent - 賣家 Agent
-2. BuyerAgent - 買家 Agent
+   - 設定底價
+   - 決定接受/拒絕/還價
+   
+2. BuyerAgent - 買家 Agent  
+   - 決定出價金額
+   - 選擇支付幣種 (這是觀察 Intent 的關鍵!)
+   - 回應賣家還價
 
 支援的 LLM：
-- Groq (免費，推薦) - GROQ_API_KEY
+- Ollama (本地運行，免費無限制) - ollama serve
+- Groq (免費快速) - GROQ_API_KEY
 - Google Gemini - GOOGLE_API_KEY
+
+觀察重點：
+- Agent 選擇幣種時會考慮手續費嗎？
+- Agent 的出價邏輯是否合理？
+- 談判過程中是否出現邏輯錯誤？
 """
 
 import os
 import json
 import re
+import time
+import asyncio
 from typing import Optional
 from dataclasses import dataclass
 
@@ -53,58 +72,97 @@ def check_ollama_running() -> bool:
         return False
 
 
-def create_llm(api_key: str = None, provider: str = "auto"):
+def create_llm(api_key: str = None, provider: str = None):
     """
     創建 LLM 實例
-    
-    優先順序: Ollama (本地) > Groq > Gemini
     
     Args:
         api_key: API Key (可選，會自動從環境變數讀取)
         provider: 指定提供者 (auto, ollama, groq, gemini)
+                  如果為 None，會從 LLM_PROVIDER 環境變數讀取
     
     Returns:
         LLM 實例或 None
     """
-    # 嘗試 Ollama (本地運行，無限制) - 自動檢測
-    if (provider in ["auto", "ollama"]) and OLLAMA_AVAILABLE:
-        if check_ollama_running():
+    # 從環境變數讀取 provider
+    if provider is None:
+        provider = os.getenv("LLM_PROVIDER", "auto")
+    
+    # Mock 模式
+    if provider == "mock":
+        return None
+    
+    # Ollama
+    if provider == "ollama":
+        if OLLAMA_AVAILABLE and check_ollama_running():
             try:
                 model = os.getenv("OLLAMA_MODEL", "llama3.2")
-                llm = ChatOllama(
-                    model=model,
-                    temperature=0.7
-                )
-                # 測試連接
-                return llm
+                return ChatOllama(model=model, temperature=0.7)
             except Exception as e:
                 print(f"⚠️ Ollama 初始化失敗: {e}")
-        elif provider == "ollama":
-            print("⚠️ Ollama 未運行！請先啟動: ollama serve")
+        return None
     
-    # 嘗試 Groq (免費且快，部分地區限制)
-    groq_key = api_key if provider == "groq" else os.getenv("GROQ_API_KEY")
-    if (provider in ["auto", "groq"]) and GROQ_AVAILABLE and groq_key:
-        try:
-            return ChatGroq(
-                model="llama-3.1-8b-instant",
-                temperature=0.7,
-                api_key=groq_key
-            )
-        except Exception as e:
-            print(f"⚠️ Groq 初始化失敗: {e}")
+    # Groq
+    if provider == "groq":
+        groq_key = api_key or os.getenv("GROQ_API_KEY")
+        if GROQ_AVAILABLE and groq_key:
+            try:
+                return ChatGroq(
+                    model="llama-3.1-8b-instant",
+                    temperature=0.7,
+                    api_key=groq_key
+                )
+            except Exception as e:
+                print(f"⚠️ Groq 初始化失敗: {e}")
+        return None
     
-    # 嘗試 Gemini
-    gemini_key = api_key if provider == "gemini" else os.getenv("GOOGLE_API_KEY")
-    if (provider in ["auto", "gemini"]) and GEMINI_AVAILABLE and gemini_key:
-        try:
-            return ChatGoogleGenerativeAI(
-                model="gemini-2.0-flash",
-                temperature=0.7,
-                google_api_key=gemini_key
-            )
-        except Exception as e:
-            print(f"⚠️ Gemini 初始化失敗: {e}")
+    # Gemini
+    if provider == "gemini":
+        gemini_key = api_key or os.getenv("GOOGLE_API_KEY")
+        if GEMINI_AVAILABLE and gemini_key:
+            try:
+                return ChatGoogleGenerativeAI(
+                    model="gemini-2.0-flash",
+                    temperature=0.7,
+                    google_api_key=gemini_key
+                )
+            except Exception as e:
+                print(f"⚠️ Gemini 初始化失敗: {e}")
+        return None
+    
+    # Auto 模式 - 按優先順序嘗試
+    if provider == "auto":
+        # 1. 嘗試 Ollama
+        if OLLAMA_AVAILABLE and check_ollama_running():
+            try:
+                model = os.getenv("OLLAMA_MODEL", "llama3.2")
+                return ChatOllama(model=model, temperature=0.7)
+            except:
+                pass
+        
+        # 2. 嘗試 Groq
+        groq_key = os.getenv("GROQ_API_KEY")
+        if GROQ_AVAILABLE and groq_key:
+            try:
+                return ChatGroq(
+                    model="llama-3.1-8b-instant",
+                    temperature=0.7,
+                    api_key=groq_key
+                )
+            except:
+                pass
+        
+        # 3. 嘗試 Gemini
+        gemini_key = os.getenv("GOOGLE_API_KEY")
+        if GEMINI_AVAILABLE and gemini_key:
+            try:
+                return ChatGoogleGenerativeAI(
+                    model="gemini-2.0-flash",
+                    temperature=0.7,
+                    google_api_key=gemini_key
+                )
+            except:
+                pass
     
     return None
 
@@ -126,14 +184,14 @@ class BaseAuctionAgent:
         exchange_service: ExchangeRateService,
         personality: str = "balanced",
         api_key: Optional[str] = None,
-        provider: str = "auto"
+        provider: str = None  # None = 從 LLM_PROVIDER 環境變數讀取
     ):
         self.name = name
         self.wallet = wallet
         self.exchange_service = exchange_service
         self.personality = personality
         
-        # 設置 LLM (自動選擇可用的提供者)
+        # 設置 LLM (從環境變數讀取 provider)
         self.llm = create_llm(api_key=api_key, provider=provider)
         
         if self.llm:
@@ -155,16 +213,27 @@ class BaseAuctionAgent:
     
     def get_wallet_info(self) -> str:
         """獲取錢包信息字符串"""
-        rates = self.exchange_service.get_all_rates()
-        info = f"錢包餘額:\n"
-        total = 0
-        for token, balance in self.wallet.balances.items():
-            rate = rates.get(token, 0)
-            usd = balance * rate
-            total += usd
-            info += f"  {token}: {balance:.4f} (≈${usd:.2f})\n"
-        info += f"總價值: ${total:.2f}"
-        return info
+        return self.wallet.format_balances(self.exchange_service)
+    
+    def _get_payment_options_str(self, amount_usd: float) -> str:
+        """獲取支付選項的格式化字符串"""
+        try:
+            options = self.wallet.get_payment_options(amount_usd, self.exchange_service)
+            if not options:
+                return "  (無可用支付選項)"
+            
+            lines = []
+            for opt in options:
+                status = "✅" if opt.is_affordable else "❌"
+                lines.append(
+                    f"  {status} {opt.token}: "
+                    f"需 {opt.total_amount:.4f} (含手續費 {opt.fee_percent}%), "
+                    f"餘額 {opt.balance:.4f}, "
+                    f"匯率 ${opt.rate:.2f}"
+                )
+            return "\n".join(lines)
+        except Exception:
+            return "  (無法計算支付選項)"
 
 
 class SellerAgent(BaseAuctionAgent):
@@ -310,28 +379,50 @@ class BuyerAgent(BaseAuctionAgent):
             return self._fallback_make_bid(item, current_price)
         
         history_str = "\n".join([
-            f"  - {b.bidder}: ${b.amount} ({b.status.value})"
+            f"  - {b.bidder}: ${b.amount} ({b.status.value if hasattr(b.status, 'value') else b.status})"
             for b in bid_history[-5:]  # 只顯示最近 5 筆
         ]) if bid_history else "無"
+        
+        # 獲取支付選項
+        payment_options = self._get_payment_options_str(current_price * 1.1)  # 預估出價
+        
+        # 計算最低出價 (必須比當前價格高 5%)
+        min_bid = current_price * 1.05
         
         prompt = f"""
 你正在參與拍賣。
 
+【物品資訊】
 物品: {item.name}
 描述: {item.description}
 當前價格: ${current_price}
-你的預算: ${self.max_budget}
+最低出價: ${min_bid:.2f} (必須比當前價格高 5%)
 
-最近出價歷史:
+【你的資訊】
+預算上限: ${self.max_budget}
+剩餘預算: ${self.wallet.get_remaining_budget():.2f}
+
+【你的錢包】
+{self.get_wallet_info()}
+
+【支付選項】(不同幣種有不同手續費!)
+{payment_options}
+
+【出價歷史】
 {history_str}
 
-{self.get_wallet_info()}
+【規則提醒】
+1. 出價必須 >= ${min_bid:.2f}
+2. 不能超出預算 ${self.max_budget}
+3. 選擇手續費低的幣種可以省錢
+4. 你需要選擇用哪個幣種支付
 
 請決定你的出價。如果不想出價，回覆 null。
 
 回覆 JSON 格式:
 {{
-    "amount": 出價金額 (數字),
+    "amount": 出價金額 (USD),
+    "token": "支付幣種 (ETH/USDC/DAI/USDT)",
     "reasoning": "你的出價理由"
 }}
 

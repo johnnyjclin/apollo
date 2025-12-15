@@ -1,17 +1,28 @@
 """
-拍賣遊戲 - 含 Negotiation 的 Agent 對戰
+🎮 拍賣遊戲 (Auction Game)
 
-場景：
-1. 多個 Agent 競標一個物品
-2. Agent 可以出價、談判、接受/拒絕
-3. 觀察 Agent 的 Payment Intent 是否正確
+用途：
+- 模擬 AI Agent 之間的拍賣談判場景
+- 觀察 Agent 的出價策略和談判行為
+- 最終驗證 Payment Intent 是否正確
 
-Negotiation 流程：
-1. 賣家設定底價
-2. 買家出價
-3. 賣家可接受、拒絕、或還價
-4. 買家可接受還價或再次出價
-5. 成交後買家需支付
+遊戲流程：
+1. 賣家 Agent 設定物品和底價
+2. 買家 Agent 輪流出價 (必須高於底價 + 最低加價幅度)
+3. 賣家 Agent 決定：接受 / 拒絕 / 還價
+4. 談判可進行多輪
+5. 成交後買家選擇幣種支付
+
+核心類別：
+- AuctionItem: 拍賣物品
+- Bid: 出價記錄 (含幣種選擇)
+- AuctionState: 遊戲狀態 (含 Intent Error 追蹤)
+- AuctionGame: 遊戲主邏輯
+
+觀察重點：
+- 買家出價是否超出預算？
+- 賣家還價是否低於買家出價？(邏輯錯誤)
+- 成交時選擇的幣種是否最優？
 """
 
 from dataclasses import dataclass, field
@@ -64,6 +75,13 @@ class Bid:
     timestamp: datetime
     status: BidStatus = BidStatus.PENDING
     message: Optional[str] = None  # Agent 的出價理由
+    token: Optional[str] = None  # 選擇的支付幣種
+    token_amount: Optional[float] = None  # 代幣數量
+    fee: Optional[float] = None  # 手續費
+    
+    # Intent Error 追蹤
+    validation_errors: list = field(default_factory=list)
+    validation_warnings: list = field(default_factory=list)
 
 
 @dataclass
@@ -102,6 +120,67 @@ class AuctionState:
     final_price: Optional[float] = None
     payment_intent: Optional[dict] = None
     payment_errors: list[dict] = field(default_factory=list)
+    
+    # 支付詳情
+    payment_token: Optional[str] = None
+    payment_token_amount: Optional[float] = None
+    payment_fee: Optional[float] = None
+    
+    # Intent Error 追蹤
+    intent_errors: list[dict] = field(default_factory=list)
+    intent_warnings: list[dict] = field(default_factory=list)
+    
+    def get_result_summary(self) -> str:
+        """獲取結果摘要"""
+        lines = []
+        lines.append("\n" + "═"*60)
+        lines.append("📋 拍賣結果報告")
+        lines.append("═"*60)
+        
+        lines.append(f"\n【物品】{self.item.name}")
+        lines.append(f"【底價】${self.item.reserve_price}")
+        lines.append(f"【狀態】{self.status.value if hasattr(self.status, 'value') else self.status}")
+        
+        if self.status == AuctionStatus.SOLD and self.winner:
+            lines.append(f"\n✅ 拍賣成功!")
+            lines.append(f"   得標者: {self.winner}")
+            lines.append(f"   成交價: ${self.final_price:.2f}")
+            
+            if self.payment_token:
+                lines.append(f"\n💳 支付詳情:")
+                lines.append(f"   幣種: {self.payment_token}")
+                lines.append(f"   金額: {self.payment_token_amount:.4f} {self.payment_token}")
+                if self.payment_fee:
+                    lines.append(f"   手續費: {self.payment_fee:.4f} {self.payment_token}")
+        else:
+            lines.append(f"\n❌ 拍賣失敗/流標")
+        
+        # 統計
+        lines.append(f"\n📊 統計:")
+        lines.append(f"   總出價次數: {len(self.bids)}")
+        lines.append(f"   談判回合數: {len(self.negotiation_history)}")
+        
+        # Intent Errors
+        if self.intent_errors or self.intent_warnings:
+            lines.append(f"\n⚠️ Intent Error 檢測:")
+            lines.append(f"   嚴重錯誤: {len(self.intent_errors)}")
+            lines.append(f"   警告: {len(self.intent_warnings)}")
+            
+            if self.intent_errors:
+                lines.append(f"\n   錯誤詳情:")
+                for err in self.intent_errors[:5]:
+                    lines.append(f"   ❌ [{err.get('type', 'UNKNOWN')}] {err.get('message', '')[:50]}")
+            
+            if self.intent_warnings:
+                lines.append(f"\n   警告詳情:")
+                for warn in self.intent_warnings[:5]:
+                    lines.append(f"   ⚠️ [{warn.get('type', 'UNKNOWN')}] {warn.get('message', '')[:50]}")
+        else:
+            lines.append(f"\n✅ 未檢測到 Intent Error")
+        
+        lines.append("\n" + "═"*60)
+        
+        return "\n".join(lines)
 
 
 class AuctionGame:
@@ -288,6 +367,114 @@ class AuctionGame:
                 message=response.get("message", "")
             )
             self.state.bids.append(new_bid)
+            
+            # 繼續談判 - 讓賣家回應這個新出價
+            await self._continue_negotiation(new_bid)
+    
+    async def _continue_negotiation(self, bid: Bid, depth: int = 0):
+        """
+        繼續談判（最多3輪）
+        """
+        if depth >= 3:  # 最多3輪談判
+            print(f"   ⏰ 談判達到上限，結束本回合談判")
+            return
+        
+        if self.state.status == AuctionStatus.SOLD:
+            return
+        
+        # 賣家回應新出價
+        seller_response = await self.seller.respond_to_bid(
+            bid=bid,
+            item=self.item,
+            reserve_price=self.item.reserve_price
+        )
+        
+        action = seller_response["action"]
+        
+        negotiation = NegotiationRound(
+            round_number=self.current_round,
+            action=action,
+            from_agent=self.seller.name,
+            to_agent=bid.bidder,
+            amount=seller_response.get("counter_amount", bid.amount),
+            message=seller_response.get("message", ""),
+            timestamp=datetime.now()
+        )
+        self.state.negotiation_history.append(negotiation)
+        
+        if action == "accept":
+            print(f"   ✅ {self.seller.name} 接受出價 ${bid.amount}!")
+            bid.status = BidStatus.ACCEPTED
+            self.state.winner = bid.bidder
+            self.state.final_price = bid.amount
+            self.state.status = AuctionStatus.SOLD
+            
+        elif action == "reject":
+            print(f"   ❌ {self.seller.name} 拒絕出價")
+            print(f"   💭 理由: {negotiation.message}")
+            bid.status = BidStatus.REJECTED
+            
+        elif action == "counter":
+            counter_amount = seller_response["counter_amount"]
+            print(f"   🔄 {self.seller.name} 還價: ${counter_amount}")
+            print(f"   💭 理由: {negotiation.message}")
+            bid.status = BidStatus.COUNTERED
+            
+            # 買家回應
+            await self._handle_counter_offer_continue(bid.bidder, counter_amount, bid.amount, depth + 1)
+    
+    async def _handle_counter_offer_continue(self, buyer_name: str, counter_amount: float, original_bid: float, depth: int):
+        """處理還價（繼續談判）"""
+        if self.state.status == AuctionStatus.SOLD:
+            return
+            
+        buyer = next((b for b in self.buyers if b.name == buyer_name), None)
+        if not buyer:
+            return
+        
+        response = await buyer.respond_to_counter(
+            counter_amount=counter_amount,
+            item=self.item,
+            original_bid=original_bid
+        )
+        
+        action = response["action"]
+        
+        negotiation = NegotiationRound(
+            round_number=self.current_round,
+            action=action,
+            from_agent=buyer_name,
+            to_agent=self.seller.name,
+            amount=response.get("new_amount", counter_amount),
+            message=response.get("message", ""),
+            timestamp=datetime.now()
+        )
+        self.state.negotiation_history.append(negotiation)
+        
+        if action == "accept":
+            print(f"   ✅ {buyer_name} 接受還價 ${counter_amount}!")
+            self.state.winner = buyer_name
+            self.state.final_price = counter_amount
+            self.state.status = AuctionStatus.SOLD
+            
+        elif action == "reject":
+            print(f"   ❌ {buyer_name} 拒絕還價，退出談判")
+            
+        elif action == "counter":
+            new_amount = response["new_amount"]
+            print(f"   🔄 {buyer_name} 再次出價: ${new_amount}")
+            
+            new_bid = Bid(
+                bid_id=f"bid_{uuid.uuid4().hex[:8]}",
+                bidder=buyer_name,
+                amount=new_amount,
+                timestamp=datetime.now(),
+                message=response.get("message", "")
+            )
+            self.state.bids.append(new_bid)
+            
+            # 繼續談判
+            await self._continue_negotiation(new_bid, depth)
     
     async def process_payment(self) -> dict:
         """
@@ -419,29 +606,21 @@ class AuctionGame:
     
     def _print_summary(self):
         """輸出拍賣結果摘要"""
-        print(f"\n{'='*60}")
-        print(f"📋 拍賣結果摘要")
-        print(f"{'='*60}")
-        print(f"   物品: {self.item.name}")
-        print(f"   狀態: {self.state.status.value}")
+        # 使用 AuctionState 的新方法
+        print(self.state.get_result_summary())
         
-        if self.state.status == AuctionStatus.SOLD:
-            print(f"   得標者: {self.state.winner}")
-            print(f"   成交價: ${self.state.final_price}")
-            print(f"   談判回合: {len(self.state.negotiation_history)}")
-            
-            if self.state.payment_errors:
-                print(f"\n   ⚠️  Payment Intent 錯誤:")
-                for e in self.state.payment_errors:
-                    print(f"      - {e['type']}: {e['message']}")
-            else:
-                print(f"\n   ✅ 支付成功完成")
+        # 詳細出價歷史
+        if self.state.bids:
+            print("\n📝 出價歷史:")
+            for bid in self.state.bids:
+                token_info = f" ({bid.token})" if bid.token else ""
+                error_flag = " ⚠️" if bid.validation_errors or bid.validation_warnings else ""
+                bid_status = bid.status.value if hasattr(bid.status, 'value') else bid.status
+                print(f"   - {bid.bidder}: ${bid.amount:.2f}{token_info} ({bid_status}){error_flag}")
         
-        print(f"\n   出價歷史:")
-        for bid in self.state.bids:
-            print(f"      - {bid.bidder}: ${bid.amount} ({bid.status.value})")
-        
-        print(f"\n   談判歷史:")
-        for n in self.state.negotiation_history:
-            print(f"      回合{n.round_number}: {n.from_agent} → {n.to_agent} | {n.action} | ${n.amount}")
+        # 談判歷史
+        if self.state.negotiation_history:
+            print("\n🤝 談判歷史:")
+            for n in self.state.negotiation_history:
+                print(f"   回合{n.round_number}: {n.from_agent} → {n.to_agent} | {n.action} | ${n.amount:.2f}")
 
