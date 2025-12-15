@@ -84,7 +84,7 @@ FIXED_ITEMS = [
         "hint": "專家意見分歧：有人認為是真跡，也有人質疑簽名筆觸。",
         "estimate_low": 150,
         "estimate_high": 300,
-        "true_value_range": (80, 450),  # 可能是假的(虧)，也可能是真的(賺)
+        "true_value_range": (130, 450),  # 可能是假的(虧)，也可能是真的(賺)
     },
     {
         "name": "💎 斯里蘭卡藍寶石",
@@ -93,7 +93,7 @@ FIXED_ITEMS = [
         "hint": "市場上近期有大量合成藍寶石流入，需謹慎評估。",
         "estimate_low": 200,
         "estimate_high": 350,
-        "true_value_range": (120, 500),
+        "true_value_range": (170, 500),
     },
     {
         "name": "🏺 明代青花瓷瓶",
@@ -102,7 +102,7 @@ FIXED_ITEMS = [
         "hint": "類似器物在蘇富比拍出高價，但也有仿品案例。",
         "estimate_low": 180,
         "estimate_high": 320,
-        "true_value_range": (50, 600),  # 波動很大
+        "true_value_range": (120, 600),  # 波動很大
     },
     {
         "name": "🎮 初代 PlayStation 原型機",
@@ -120,7 +120,7 @@ FIXED_ITEMS = [
         "hint": "市面上高仿品極為精密，專業鑑定也有失誤案例。",
         "estimate_low": 100,
         "estimate_high": 220,
-        "true_value_range": (40, 350),
+        "true_value_range": (90, 350),
     },
     {
         "name": "🍷 1982 拉菲紅酒",
@@ -129,7 +129,7 @@ FIXED_ITEMS = [
         "hint": "1982 是傳奇年份，但假酒問題嚴重，需確認儲存條件。",
         "estimate_low": 160,
         "estimate_high": 280,
-        "true_value_range": (70, 450),
+        "true_value_range": (20, 650),
     },
     {
         "name": "🎸 據稱 Jimi Hendrix 簽名吉他",
@@ -138,7 +138,7 @@ FIXED_ITEMS = [
         "hint": "Hendrix 遺物極為稀少，市場價值高但偽造也多。",
         "estimate_low": 200,
         "estimate_high": 400,
-        "true_value_range": (100, 700),
+        "true_value_range": (100, 800),
     },
     {
         "name": "📱 Apple-1 電腦主板",
@@ -147,7 +147,7 @@ FIXED_ITEMS = [
         "hint": "真品在拍賣會上屢創新高，但流通數量存疑。",
         "estimate_low": 250,
         "estimate_high": 450,
-        "true_value_range": (150, 800),
+        "true_value_range": (150, 900),
     },
     {
         "name": "🖼️ Banksy 碎紙畫複製品",
@@ -156,7 +156,7 @@ FIXED_ITEMS = [
         "hint": "Banksy 市場火熱，但官方從未確認授權計畫。",
         "estimate_low": 80,
         "estimate_high": 180,
-        "true_value_range": (20, 300),
+        "true_value_range": (20, 600),
     },
     {
         "name": "⌚ Rolex Daytona 「Paul Newman」",
@@ -165,7 +165,7 @@ FIXED_ITEMS = [
         "hint": "Paul Newman 配色近年價格飆升，但市場有大量改裝錶。",
         "estimate_low": 220,
         "estimate_high": 380,
-        "true_value_range": (100, 650),
+        "true_value_range": (100, 1050),
     },
 ]
 

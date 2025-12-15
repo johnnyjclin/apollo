@@ -536,7 +536,7 @@ class TournamentManager:
                 round_log.append(f"- ❌ **{err['type']}**: {err['message']}")
         
         # 談判階段（每3回合進行一次）
-        if state.current_round % 3 == 0 and state.current_round < state.total_rounds:
+        if state.current_round % 2 == 0 and state.current_round < state.total_rounds:
             round_log.append("")
             round_log.append("### 🤝 談判階段")
             round_log.append("")
